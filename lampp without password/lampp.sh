@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # System zu Aktualisieren
 sudo apt update -y
 sudo apt upgrade -y
@@ -99,3 +101,4 @@ sudo mkdir /usr/share/phpmyadmin/tmp/
 #Web-Server Rechte erteilen für das Temporär Verzeichnis
 sudo chown -R www-data:www-data /usr/share/phpmyadmin/tmp/
 
+exit 0;
