@@ -3,7 +3,7 @@ apt update -y
 apt upgrade -y
 
 # Benötigte Pakete für die Installation
-apt install ca-certificates apt-transport-https lsb-release gnupg curl nano unzip -y
+apt install ca-certificates nano lsb-release gnupg apt-transport-https curl unzip -y
 
 # Paket Quelle für PHP
 curl -fsSL https://packages.sury.org/php/apt.gpg -o /usr/share/keyrings/php-archive-keyring.gpg
@@ -23,8 +23,8 @@ apt install mariadb-server mariadb-client -y
 
 # Automate mysql_secure_installation
 mysql <<EOF
-CREATE USER 'admin'@'%' IDENTIFIED BY '$(sudo cat /etc/mysql/debian.cnf | grep "password" | head -n 1 | awk -F" = " '{print $2}')';
-GRANT ALL PRIVILEGES ON *.* TO 'admin'@'%';
+CREATE USER 'nextcloud'@'%' IDENTIFIED BY '$(sudo cat /etc/mysql/debian.cnf | grep "password" | head -n 1 | awk -F" = " '{print $2}')';
+GRANT ALL PRIVILEGES ON *.* TO 'nextcloud'@'%';
 FLUSH PRIVILEGES;
 EOF
 
@@ -96,3 +96,27 @@ mkdir /usr/share/phpmyadmin/tmp/
 
 #Web-Server Rechte erteilen für das Temporär Verzeichnis
 chown -R www-data:www-data /usr/share/phpmyadmin/tmp/
+
+#Nextcloud Installation
+cd /var/www/html
+
+#Nextcloud Herunterladen
+wget https://download.nextcloud.com/server/releases/latest.tar.bz2
+
+#Nextcloud Entpacken
+tar xfvj latest.tar.bz2
+
+#Nextcloud Archiv Löschen
+rm latest.tar.bz2
+
+#apache2 rewrite aktivieren
+a2enmod rewrite
+
+#apache2 headers aktivieren
+a2enmod headers
+
+#apache2 neustarten
+systemctl restart apache2
+
+#Webserver besitzerrechte geben (nextcloud)
+chown -R www-data:www-data /var/www/html/nextcloud/
