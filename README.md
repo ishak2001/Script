@@ -1,5 +1,5 @@
 # Script
-Automatically Install Script (Debian)
+# Automatically Install Script (Debian)
 
 <ul>
   <li>Lampp</li>
