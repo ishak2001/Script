@@ -23,7 +23,7 @@ apt install mariadb-server mariadb-client -y
 
 # Automate mysql_secure_installation
 mysql <<EOF
-CREATE USER 'admin'@'%' IDENTIFIED BY '';
+CREATE USER 'admin'@'%' IDENTIFIED BY '$(sudo cat /etc/mysql/debian.cnf | grep "password" | head -n 1 | awk -F" = " '{print $2}')';
 GRANT ALL PRIVILEGES ON *.* TO 'admin'@'%';
 FLUSH PRIVILEGES;
 EOF
