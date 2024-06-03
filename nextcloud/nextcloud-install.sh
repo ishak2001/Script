@@ -1,73 +1,44 @@
-# System zu Aktualisieren
-apt update -y
+#!/bin/bash
+
+# Passwortabfragen
+read -sp 'Geben Sie das MySQL admin-Passwort ein: ' ADMIN_PW
+echo
+read -sp 'Geben Sie das Nextcloud admin-Passwort ein: ' NEXTCLOUD_ADMIN_PW
+echo
+
+# System aktualisieren
+apt update
 apt upgrade -y
 
-# Benötigte Pakete für die Installation
-apt install ca-certificates nano lsb-release gnupg apt-transport-https curl unzip -y
+# Notwendige Pakete installieren
+apt install -y ca-certificates apt-transport-https lsb-release gnupg curl nano unzip
 
-# Paket Quelle für PHP
-curl -fsSL https://packages.sury.org/php/apt.gpg -o /usr/share/keyrings/php-archive-keyring.gpg
-echo "deb [signed-by=/usr/share/keyrings/php-archive-keyring.gpg] https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list
+# Sury PHP Repository hinzufügen
+curl -fsSL https://packages.sury.org/php/apt.gpg | gpg --dearmor -o /usr/share/keyrings/php-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/php-archive-keyring.gpg] https://packages.sury.org/php/ $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/php.list
 
-#Pakete Aktualisieren
-apt update -y
+# Paketlisten aktualisieren
+apt update
 
-#Web-Server Installieren
-apt install apache2 -y
+# Apache und PHP 8.1 installieren
+apt install -y apache2
+apt install -y php8.1 php8.1-cli php8.1-common php8.1-curl php8.1-gd php8.1-intl php8.1-mbstring php8.1-mysql php8.1-opcache php8.1-readline php8.1-xml php8.1-xsl php8.1-zip php8.1-bz2 libapache2-mod-php8.1
 
-#PHP und die dazugehörige Module Installieren
-apt install php8.2 php8.2-cli php8.2-common php8.2-curl php8.2-gd php8.2-intl php8.2-mbstring php8.2-mysql php8.2-opcache php8.2-readline php8.2-xml php8.2-xsl php8.2-zip php8.2-bz2 libapache2-mod-php8.2 -y
+# MariaDB installieren
+apt install -y mariadb-server mariadb-client
 
-#MariaDB Server, sowie Client Installieren
-apt install mariadb-server mariadb-client -y
-
-# Automate mysql_secure_installation
-mysql <<EOF
-CREATE USER 'nextcloud'@'%' IDENTIFIED BY '$(sudo cat /etc/mysql/debian.cnf | grep "password" | head -n 1 | awk -F" = " '{print $2}')';
-GRANT ALL PRIVILEGES ON *.* TO 'nextcloud'@'%';
-FLUSH PRIVILEGES;
-EOF
-
-#Verzeichnis wechseln für phpMyAdmin
+# phpMyAdmin herunterladen und einrichten
 cd /usr/share
-
-#phpMyAdmin Installieren
-wget --no-check-certificate  https://www.phpmyadmin.net/downloads/phpMyAdmin-latest-all-languages.zip -O phpmyadmin.zip
-
-#phpMyAdmin entpacken
+wget https://www.phpmyadmin.net/downloads/phpMyAdmin-latest-all-languages.zip -O phpmyadmin.zip
 unzip phpmyadmin.zip
-
-#Zip Datei Löschen
 rm phpmyadmin.zip
-
-#Ordner namen zu phpmyadmin umbennen
 mv phpMyAdmin-*-all-languages phpmyadmin
-
-#Berechtigung für phpMyAdmin erteilen
 chmod -R 0755 phpmyadmin
 
-# Konfigurationsdatei Hinzufügen
-echo "<?php
-declare(strict_types=1);
+# phpMyAdmin Apache Konfiguration erstellen
+echo "# phpMyAdmin Apache configuration
 
-\$cfg['blowfish_secret'] = ''; /* YOU MUST FILL IN THIS FOR COOKIE AUTH! */
-
-\$i = 0;
-
-\$i++;
-\$cfg['Servers'][\$i]['auth_type'] = 'config';
-\$cfg['Servers'][\$i]['host'] = 'localhost';
-\$cfg['Servers'][\$i]['user'] = 'admin';
-\$cfg['Servers'][\$i]['password'] = '';
-\$cfg['Servers'][\$i]['AllowNoPassword'] = true;
-
-\$cfg['UploadDir'] = '';
-\$cfg['SaveDir'] = '';
-
-?>" | tee -a /usr/share/phpmyadmin/config.inc.php
-
-#Konfigurationsdatei Hinzufügen
-echo "Alias /phpmyadmin /usr/share/phpmyadmin
+Alias /phpmyadmin /usr/share/phpmyadmin
 
 <Directory /usr/share/phpmyadmin>
     Options SymLinksIfOwnerMatch
@@ -83,40 +54,47 @@ echo "Alias /phpmyadmin /usr/share/phpmyadmin
 </Directory>
 <Directory /usr/share/phpmyadmin/setup/lib>
     Require all denied
-</Directory>" >> /etc/apache2/conf-available/phpmyadmin.conf
+</Directory>" > /etc/apache2/conf-available/phpmyadmin.conf
 
-#phpMyAdmin Aktivieren
+# Konfiguration aktivieren und Apache neu laden
 a2enconf phpmyadmin
-
-#Webserver reloaden
 systemctl reload apache2
 
-#Temporär Verzeichnis für phpMyAdmin erstellen
-mkdir /usr/share/phpmyadmin/tmp/
+# MySQL admin-Passwort setzen
+mysqladmin -u admin password "$ADMIN_PW"
 
-#Web-Server Rechte erteilen für das Temporär Verzeichnis
-chown -R www-data:www-data /usr/share/phpmyadmin/tmp/
-
-#Nextcloud Installation
+# Nextcloud herunterladen und einrichten
 cd /var/www/html
+wget https://download.nextcloud.com/server/releases/nextcloud-25.0.4.zip -O nextcloud.zip
+unzip nextcloud.zip
+rm nextcloud.zip
+chown -R www-data:www-data /var/www/html/nextcloud
+chmod -R 755 nextcloud
 
-#Nextcloud Herunterladen
-wget https://download.nextcloud.com/server/releases/latest.tar.bz2
+# Nextcloud benutzer und Datenbank anlegen
+mysql -u admin -p"$ADMIN_PW" <<EOF
+DROP USER IF EXISTS 'nextcloud'@'localhost';
+CREATE USER 'nextcloud'@'localhost' IDENTIFIED BY '$NEXTCLOUD_ADMIN_PW';
+GRANT ALL PRIVILEGES ON nextcloud.* TO 'nextcloud'@'localhost';
+FLUSH PRIVILEGES;
+EOF
 
-#Nextcloud Entpacken
-tar xfvj latest.tar.bz2
+# Nextcloud Konfiguration erstellen
+cat <<EOL > /var/www/html/nextcloud/config/autoconfig.php
+<?php
+\$AUTOCONFIG = array(
+  "dbtype"        => "mysql",
+  "dbname"        => "nextcloud",
+  "dbuser"        => "admin",
+  "dbpass"        => "$ADMIN_PW",
+  "dbhost"        => "localhost",
+  "dbtableprefix" => "",
+  "adminlogin"    => "admin",
+  "adminpass"     => "$NEXTCLOUD_ADMIN_PW",
+  "directory"     => "/var/www/html/nextcloud/data",
+);
+EOL
 
-#Nextcloud Archiv Löschen
-rm latest.tar.bz2
-
-#apache2 rewrite aktivieren
-a2enmod rewrite
-
-#apache2 headers aktivieren
-a2enmod headers
-
-#apache2 neustarten
-systemctl restart apache2
-
-#Webserver besitzerrechte geben (nextcloud)
-chown -R www-data:www-data /var/www/html/nextcloud/
+# Apache Konfiguration aktivieren und neu laden
+a2enmod rewrite headers env dir mime setenvif
+systemctl reload apache2
